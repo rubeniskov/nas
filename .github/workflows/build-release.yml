@@ -1,0 +1,149 @@
+name: Build and Release BananaPro Image
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc-arm-linux-gnueabihf flex bison bc libssl-dev make git wget \
+            device-tree-compiler u-boot-tools swig python3-dev python3-setuptools \
+            libgnutls28-dev libncurses-dev libarchive-tools rsync dosfstools util-linux e2fsprogs
+      
+      - name: Setup Node.js for semantic-release
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Install semantic-release
+        run: |
+          npm install -g semantic-release @semantic-release/git @semantic-release/changelog \
+            @semantic-release/exec conventional-changelog-conventionalcommits
+      
+      - name: Determine next version
+        id: version
+        run: |
+          # Create semantic-release config
+          cat > .releaserc.json <<EOF
+          {
+            "branches": ["main"],
+            "plugins": [
+              ["@semantic-release/commit-analyzer", {
+                "preset": "conventionalcommits"
+              }],
+              ["@semantic-release/release-notes-generator", {
+                "preset": "conventionalcommits"
+              }],
+              ["@semantic-release/changelog", {
+                "changelogFile": "CHANGELOG.md"
+              }],
+              ["@semantic-release/exec", {
+                "verifyReleaseCmd": "echo \${nextRelease.version} > .version"
+              }],
+              ["@semantic-release/github", {
+                "assets": []
+              }],
+              ["@semantic-release/git", {
+                "assets": ["CHANGELOG.md"],
+                "message": "chore(release): \${nextRelease.version} [skip ci]\n\n\${nextRelease.notes}"
+              }]
+            ]
+          }
+          EOF
+          
+          # Run semantic-release in dry-run mode to get version
+          npx semantic-release --dry-run || true
+          
+          # Read version if it was determined
+          if [ -f .version ]; then
+            VERSION=$(cat .version)
+            echo "version=${VERSION}" >> $GITHUB_OUTPUT
+            echo "has_release=true" >> $GITHUB_OUTPUT
+            echo "Next version: ${VERSION}"
+          else
+            echo "has_release=false" >> $GITHUB_OUTPUT
+            echo "No new version to release"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build BananaPro image
+        if: steps.version.outputs.has_release == 'true'
+        run: |
+          # Build the complete image
+          sudo chmod +x scripts/banapro.sh
+          sudo ./scripts/banapro.sh build
+        env:
+          JOBS: 2
+      
+      - name: Prepare release artifacts
+        if: steps.version.outputs.has_release == 'true'
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          ARTIFACTS_DIR="artifacts/banapro"
+          
+          # Rename artifacts with version
+          if [ -f "${ARTIFACTS_DIR}/archlinuxarm-bananapro.img" ]; then
+            cp "${ARTIFACTS_DIR}/archlinuxarm-bananapro.img" "archlinuxarm-bananapro-${VERSION}.img"
+          fi
+          
+          if [ -f "${ARTIFACTS_DIR}/archlinuxarm-bananapro.img.tgz" ]; then
+            cp "${ARTIFACTS_DIR}/archlinuxarm-bananapro.img.tgz" "archlinuxarm-bananapro-${VERSION}.img.tgz"
+          fi
+          
+          # Create checksums
+          sha256sum archlinuxarm-bananapro-${VERSION}.img* > checksums.txt
+      
+      - name: Create Release
+        if: steps.version.outputs.has_release == 'true'
+        run: |
+          # Update semantic-release config to include assets
+          cat > .releaserc.json <<EOF
+          {
+            "branches": ["main"],
+            "plugins": [
+              ["@semantic-release/commit-analyzer", {
+                "preset": "conventionalcommits"
+              }],
+              ["@semantic-release/release-notes-generator", {
+                "preset": "conventionalcommits"
+              }],
+              ["@semantic-release/changelog", {
+                "changelogFile": "CHANGELOG.md"
+              }],
+              ["@semantic-release/github", {
+                "assets": [
+                  {"path": "archlinuxarm-bananapro-*.img", "label": "BananaPro Image"},
+                  {"path": "archlinuxarm-bananapro-*.img.tgz", "label": "BananaPro Image (compressed)"},
+                  {"path": "checksums.txt", "label": "Checksums"}
+                ]
+              }],
+              ["@semantic-release/git", {
+                "assets": ["CHANGELOG.md"],
+                "message": "chore(release): \${nextRelease.version} [skip ci]\n\n\${nextRelease.notes}"
+              }]
+            ]
+          }
+          EOF
+          
+          # Run semantic-release to create the release
+          npx semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

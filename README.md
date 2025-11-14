@@ -1,11 +1,45 @@
-You can automate the full Banana Pi M1+ Arch Linux build with:
-```
-./scripts/bpi-m1p-setup.sh
+# BananaPro NAS Image Builder
+
+## Automated Builds
+
+The repository uses GitHub Actions to automatically build and release BananaPro images when changes are pushed to the `main` branch.
+
+### How it works:
+1. **Conventional Commits**: Use conventional commit messages (`feat:`, `fix:`, `docs:`, etc.) in your commits
+2. **Automatic Versioning**: The CI pipeline uses semantic versioning to determine the next version based on your commits
+3. **Automated Release**: Each push to `main` triggers a build that creates a GitHub release with the generated image
+
+### Available Releases
+Check the [Releases](https://github.com/rubeniskov/nas/releases) page for the latest BananaPro images.
+
+### Commit Message Format
+To ensure proper versioning, use conventional commit messages:
+- `feat:` - New feature (triggers minor version bump)
+- `fix:` - Bug fix (triggers patch version bump)
+- `docs:` - Documentation changes
+- `chore:` - Maintenance tasks
+- `BREAKING CHANGE:` - Breaking changes (triggers major version bump)
+
+## Manual Build
+
+You can also build the image manually:
+
+```bash
+./scripts/banapro.sh build
 ```
 
-Automation helpers:
-- `./scripts/banapro-build.sh` builds the mainline Banana Pro kernel (zImage, dtbs, modules, headers) and U-Boot as described in the Mainline Kernel Howto and U-Boot guide.
-- `sudo ./scripts/create-arch-rootfs.sh /dev/sdX` provisions an Arch Linux ARM rootfs on the specified card/drive, mirroring the Arch install steps (set `ARCH_ROOTFS_URL`, `UBOOT_BIN_URL`, or `BOOTSCR_URL` to override defaults).
+This will:
+- Build the mainline Banana Pro kernel (zImage, dtbs, modules, headers)
+- Build U-Boot
+- Create an Arch Linux ARM rootfs
+- Generate the final `.img` file in `artifacts/banapro/`
+
+### Build Commands:
+- `./scripts/banapro.sh build` - Build everything (kernel, U-Boot, rootfs, and image)
+- `./scripts/banapro.sh build-kernel` - Build only the kernel
+- `./scripts/banapro.sh build-uboot` - Build only U-Boot
+- `./scripts/banapro.sh build-rootfs` - Build only the rootfs
+- `./scripts/banapro.sh build-image` - Build only the image (requires pre-built rootfs)
 
 # References
 
