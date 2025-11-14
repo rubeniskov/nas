@@ -24,7 +24,12 @@ EOF
 
 ROOTFS_TAR=""
 IMAGE_PATH=""
-IMAGE_SIZE_MB=${IMAGE_SIZE_MB:-2048}
+IMAGE_SIZE_MB_ENV="${IMAGE_SIZE_MB:-}"
+CLI_IMAGE_SIZE=""
+IMAGE_SIZE_MB=""
+IMAGE_SLACK_MB=512
+IMAGE_MIN_BASE_MB=2048
+IMAGE_FALLBACK_MB=4096
 TGZ_OUTPUT=""
 BOARD_DTB_OVERRIDE=""
 LCD_DTBO_OVERRIDE=""
@@ -41,7 +46,7 @@ while [[ $# -gt 0 ]]; do
 			shift 2
 			;;
 		--image-size-mb)
-			IMAGE_SIZE_MB="$2"
+			CLI_IMAGE_SIZE="$2"
 			shift 2
 			;;
 		--tgz)
@@ -85,7 +90,59 @@ if [[ -n "${TGZ_OUTPUT}" ]]; then
 	mkdir -p "$(dirname "${TGZ_OUTPUT}")"
 fi
 
+estimate_rootfs_size_bytes() {
+	local tarball="$1"
+	local metadata="${tarball}.size"
+	local value=""
+	if [[ -f "${metadata}" ]]; then
+		value=$(tr -d '[:space:]' < "${metadata}")
+		if [[ "${value}" =~ ^[0-9]+$ ]]; then
+			log "using rootfs size metadata from ${metadata}"
+			printf '%s' "${value}"
+			return 0
+		fi
+		log "warning: ignoring malformed rootfs metadata ${metadata}"
+	fi
+	if value=$(stat -c '%s' "${tarball}" 2>/dev/null); then
+		value=$(( value * 3 ))
+		log "approximating rootfs size from compressed tar (${value} bytes estimated)"
+		printf '%s' "${value}"
+		return 0
+	fi
+	printf '%s' ""
+}
+
+ROOTFS_EST_BYTES=$(estimate_rootfs_size_bytes "${ROOTFS_TAR}")
+ROOTFS_EST_MB=""
+REQUIRED_IMAGE_MB=""
+if [[ -n "${ROOTFS_EST_BYTES}" ]]; then
+	ROOTFS_EST_MB=$(( (ROOTFS_EST_BYTES + 1048575) / 1048576 ))
+	REQUIRED_IMAGE_MB=$(( ROOTFS_EST_MB + IMAGE_SLACK_MB ))
+	if (( REQUIRED_IMAGE_MB < IMAGE_MIN_BASE_MB )); then
+		REQUIRED_IMAGE_MB=${IMAGE_MIN_BASE_MB}
+	fi
+else
+	REQUIRED_IMAGE_MB=${IMAGE_FALLBACK_MB}
+fi
+
+if [[ -n "${CLI_IMAGE_SIZE}" ]]; then
+	IMAGE_SIZE_MB="${CLI_IMAGE_SIZE}"
+elif [[ -n "${IMAGE_SIZE_MB_ENV}" ]]; then
+	IMAGE_SIZE_MB="${IMAGE_SIZE_MB_ENV}"
+else
+	IMAGE_SIZE_MB="${REQUIRED_IMAGE_MB}"
+	if [[ -n "${ROOTFS_EST_MB}" ]]; then
+		log "auto-selected image size ${IMAGE_SIZE_MB} MiB (rootfs ~${ROOTFS_EST_MB} MiB + ${IMAGE_SLACK_MB} MiB slack)"
+	else
+		log "auto-selected image size ${IMAGE_SIZE_MB} MiB (fallback default)"
+	fi
+fi
+
 [[ "${IMAGE_SIZE_MB}" =~ ^[0-9]+$ ]] || { echo "--image-size-mb must be numeric" >&2; exit 1; }
+if [[ -n "${ROOTFS_EST_MB}" ]] && (( IMAGE_SIZE_MB < REQUIRED_IMAGE_MB )); then
+	log "error: image size ${IMAGE_SIZE_MB} MiB is too small for rootfs (~${ROOTFS_EST_MB} MiB). Minimum ${REQUIRED_IMAGE_MB} MiB required."
+	exit 1
+fi
 
 if [[ -n "${BOARD_DTB_OVERRIDE}" ]]; then
 	BOARD_DTB="${BOARD_DTB_OVERRIDE}"

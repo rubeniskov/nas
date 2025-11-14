@@ -36,6 +36,7 @@ EXTRA_PACKAGES=(
 	glmark2
 )
 QEMU_STATIC_BIN="/usr/bin/qemu-arm-static"
+HOST_RESOLV_CONF="${HOST_RESOLV_CONF:-/etc/resolv.conf}"
 ROOTFS_URL="${ARCH_ROOTFS_URL:-${DEFAULT_ROOTFS_URL}}"
 OUTPUT_PATH=""
 WORK_DIR=""
@@ -109,8 +110,14 @@ mkdir -p "${ROOTFS_DIR}"
 CHROOT_MOUNTS_ACTIVE=0
 RESOLV_CONF_BACKUP=""
 RESOLV_CONF_RESTORE_MODE=""
+CHROOT_MOUNTS_ACTIVE=0
+RESOLV_CONF_BACKUP=""
+RESOLV_CONF_RESTORE_MODE=""
 
 cleanup() {
+	if [[ ${CHROOT_MOUNTS_ACTIVE} -eq 1 ]]; then
+		umount_chroot_fs || true
+	fi
 	if [[ ${CHROOT_MOUNTS_ACTIVE} -eq 1 ]]; then
 		umount_chroot_fs || true
 	fi
@@ -129,6 +136,18 @@ fi
 
 log "extracting base rootfs"
 bsdtar -xpf "${BASE_TAR}" -C "${ROOTFS_DIR}"
+
+sync_resolv_conf() {
+	if [[ -f "${HOST_RESOLV_CONF}" ]]; then
+		log "copying host resolv.conf for chroot networking"
+		rm -f "${ROOTFS_DIR}/etc/resolv.conf"
+		install -m 0644 "${HOST_RESOLV_CONF}" "${ROOTFS_DIR}/etc/resolv.conf"
+	else
+		log "warning: host resolv.conf ${HOST_RESOLV_CONF} not found; DNS may fail inside chroot"
+	fi
+}
+
+sync_resolv_conf
 
 install_kernel_artifacts() {
 	local kernel_src="${ARTIFACTS_DIR}/zImage"
@@ -203,8 +222,20 @@ remove_qemu_static() {
 configure_pacman_sandbox() {
 	local pacman_conf="${ROOTFS_DIR}/etc/pacman.conf"
 	[[ -f "${pacman_conf}" ]] || { log "error: missing ${pacman_conf}"; exit 1; }
-	if ! grep -q '^\s*DisableSandbox\b' "${pacman_conf}"; then
+	if ! grep -Eq '^[[:space:]]*DisableSandbox([[:space:]]|$)' "${pacman_conf}"; then
 		awk 'BEGIN{inserted=0} {print; if (!inserted && $0 ~ /^\[options\]/) {print "DisableSandbox"; inserted=1}}' "${pacman_conf}" > "${pacman_conf}.tmp"
+		mv "${pacman_conf}.tmp" "${pacman_conf}"
+	fi
+	if grep -Eq '^[[:space:]]*CheckSpace([[:space:]]|$)' "${pacman_conf}"; then
+		log "disabling pacman CheckSpace to avoid cachedir mount checks"
+		awk 'BEGIN{done=0} {
+			if (!done && $0 ~ /^[[:space:]]*CheckSpace(\b|$)/) {
+				print "#" $0 " (disabled for chroot build)"
+				done=1
+			} else {
+				print
+			}
+		}' "${pacman_conf}" > "${pacman_conf}.tmp"
 		mv "${pacman_conf}.tmp" "${pacman_conf}"
 	fi
 }
@@ -244,6 +275,16 @@ restore_chroot_resolv_conf() {
 	RESOLV_CONF_RESTORE_MODE=""
 }
 
+write_rootfs_size_metadata() {
+	local size_bytes size_mib meta_path
+	size_bytes=$(du -sb "${ROOTFS_DIR}" | awk '{print $1}')
+	meta_path="${OUTPUT_PATH}.size"
+	printf '%s\n' "${size_bytes}" > "${meta_path}"
+	chmod 0644 "${meta_path}"
+	size_mib=$(( (size_bytes + 1048575) / 1048576 ))
+	log "rootfs size ~${size_mib} MiB recorded at ${meta_path}"
+}
+
 customize_rootfs() {
 	log "customizing rootfs packages and services"
 	configure_pacman_sandbox
@@ -255,6 +296,7 @@ customize_rootfs() {
 	set +e
 	chroot "${ROOTFS_DIR}" /usr/bin/env -i HOME=/root TERM=xterm PATH=/usr/bin:/usr/sbin LANG=C LC_ALL=C /bin/bash -eu <<CHROOT
 set -euo pipefail
+	export PACMAN_DISABLE_SANDBOX=1
 pacman-key --init
 pacman-key --populate archlinuxarm
 pacman -Syu --noconfirm
@@ -307,3 +349,4 @@ customize_rootfs
 log "packaging rootfs to ${OUTPUT_PATH}"
 bsdtar -cpf - -C "${ROOTFS_DIR}" . | gzip -c > "${OUTPUT_PATH}"
 log "rootfs tarball ready at ${OUTPUT_PATH}"
+write_rootfs_size_metadata
