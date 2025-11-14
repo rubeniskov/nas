@@ -15,6 +15,8 @@ BOARD_DTB="${BOARD_DTB:-sun7i-a20-bananapro.dtb}"
 UBOOT_DEFCONFIG="${UBOOT_DEFCONFIG:-Bananapro_defconfig}"
 LCD_DTBO="${LCD_DTBO:-bpi-m1p-lcd.dtbo}"
 PATCH_FILE="${ROOT_DIR}/patches/0001_dt-overlays-include-arm-dts.patch"
+LINUX_PATCHES=()
+LINUX_PATCHES+=("${ROOT_DIR}/patches/0002_sun7i-a20-bananapro-cpu-clock.patch")
 JOBS="${JOBS:-$(nproc)}"
 APT_PKGS=()
 APT_PKGS+=(gcc-arm-linux-gnueabihf flex bison bc libssl-dev make git wget)
@@ -53,18 +55,33 @@ ensure_repo() {
 	fi
 }
 
-apply_dto_patch() {
-	if [[ ! -f "${PATCH_FILE}" ]]; then
-		log "patch file ${PATCH_FILE} missing; skipping"
+apply_patch_if_needed() {
+	local repo_dir="$1"
+	local patch_path="$2"
+	local label="$3"
+	if [[ -z "${patch_path}" || ! -f "${patch_path}" ]]; then
+		log "${label} patch file ${patch_path:-<unset>} missing; skipping"
 		return
 	fi
 
-	if git -C "${DTO_DIR}" apply --check --reverse "${PATCH_FILE}" >/dev/null 2>&1; then
-		log "dt-overlays patch already applied"
+	if git -C "${repo_dir}" apply --check --reverse "${patch_path}" >/dev/null 2>&1; then
+		log "${label} patch already applied: ${patch_path##*/}"
 	else
-		log "applying dt-overlays patch"
-		git -C "${DTO_DIR}" apply "${PATCH_FILE}"
+		log "applying ${label} patch: ${patch_path##*/}"
+		git -C "${repo_dir}" apply "${patch_path}"
 	fi
+}
+
+apply_dto_patch() {
+	apply_patch_if_needed "${DTO_DIR}" "${PATCH_FILE}" "dt-overlays"
+}
+
+apply_linux_patches() {
+	local patch
+	for patch in "${LINUX_PATCHES[@]}"; do
+		[[ -n "${patch}" ]] || continue
+		apply_patch_if_needed "${LINUX_DIR}" "${patch}" "linux"
+	done
 }
 
 copy_dtb() {

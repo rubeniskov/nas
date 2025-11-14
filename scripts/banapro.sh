@@ -31,6 +31,7 @@ cmd_fetch_deps() {
 	ensure_repo "${LINUX_DIR}" git://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git "${LINUX_REV}"
 	ensure_repo "${DTO_DIR}" https://github.com/wens/dt-overlays.git "${DTO_REV}"
 	ensure_repo "${UBOOT_DIR}" git://git.denx.de/u-boot.git "${UBOOT_REV}"
+	apply_linux_patches
 	apply_dto_patch
 }
 

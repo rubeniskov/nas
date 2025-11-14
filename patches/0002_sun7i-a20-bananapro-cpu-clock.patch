@@ -1,0 +1,16 @@
+diff --git a/arch/arm/boot/dts/allwinner/sun7i-a20-bananapro.dts b/arch/arm/boot/dts/allwinner/sun7i-a20-bananapro.dts
+index e22f0e8bb17a..a130ac513950 100644
+--- a/arch/arm/boot/dts/allwinner/sun7i-a20-bananapro.dts
++++ b/arch/arm/boot/dts/allwinner/sun7i-a20-bananapro.dts
+@@ -217,3 +217,11 @@ &usbphy {
+ 	usb2_vbus-supply = <&reg_usb2_vbus>;
+ 	status = "okay";
+ };
++
++&cpu0 {
++	clock-frequency = <912000000>;
++};
++
++&cpu1 {
++	clock-frequency = <912000000>;
++};
