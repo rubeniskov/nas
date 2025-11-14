@@ -23,6 +23,19 @@ EOF
 [[ "${EUID}" -eq 0 ]] || { echo "rootfs.sh must run as root" >&2; usage; }
 
 DEFAULT_ROOTFS_URL="http://os.archlinuxarm.org/os/ArchLinuxARM-armv7-latest.tar.gz"
+EXTRA_PACKAGES=(
+	vim
+	cloud-guest-utils
+	sudo
+	mesa
+	mesa-demos
+	mesa-utils
+	weston
+	seatd
+	wayland-utils
+	glmark2
+)
+QEMU_STATIC_BIN="/usr/bin/qemu-arm-static"
 ROOTFS_URL="${ARCH_ROOTFS_URL:-${DEFAULT_ROOTFS_URL}}"
 OUTPUT_PATH=""
 WORK_DIR=""
@@ -93,8 +106,14 @@ fi
 ROOTFS_DIR="${WORK_DIR}/rootfs"
 rm -rf "${ROOTFS_DIR}"
 mkdir -p "${ROOTFS_DIR}"
+CHROOT_MOUNTS_ACTIVE=0
+RESOLV_CONF_BACKUP=""
+RESOLV_CONF_RESTORE_MODE=""
 
 cleanup() {
+	if [[ ${CHROOT_MOUNTS_ACTIVE} -eq 1 ]]; then
+		umount_chroot_fs || true
+	fi
 	rm -rf "${ROOTFS_DIR}"
 	if [[ ${WORK_DIR_CUSTOM} -eq 0 ]]; then
 		rm -rf "${WORK_DIR}"
@@ -146,6 +165,144 @@ install_kernel_artifacts() {
 }
 
 install_kernel_artifacts
+
+mount_chroot_fs() {
+	mount -t proc proc "${ROOTFS_DIR}/proc"
+	mount --rbind /sys "${ROOTFS_DIR}/sys"
+	mount --make-rslave "${ROOTFS_DIR}/sys"
+	mount --rbind /dev "${ROOTFS_DIR}/dev"
+	mount --make-rslave "${ROOTFS_DIR}/dev"
+	mount --rbind /run "${ROOTFS_DIR}/run"
+	mount --make-rslave "${ROOTFS_DIR}/run"
+	CHROOT_MOUNTS_ACTIVE=1
+}
+
+umount_chroot_fs() {
+	local target
+	for target in run dev sys proc; do
+		if mountpoint -q "${ROOTFS_DIR}/${target}"; then
+			umount -R "${ROOTFS_DIR}/${target}" || umount -Rl "${ROOTFS_DIR}/${target}" || true
+		fi
+	done
+	CHROOT_MOUNTS_ACTIVE=0
+}
+
+ensure_qemu_static() {
+	if [[ ! -x "${QEMU_STATIC_BIN}" ]]; then
+		log "error: ${QEMU_STATIC_BIN} not found; install qemu-user-static on the host"
+		exit 1
+	fi
+	mkdir -p "${ROOTFS_DIR}/usr/bin"
+	cp "${QEMU_STATIC_BIN}" "${ROOTFS_DIR}${QEMU_STATIC_BIN}"
+}
+
+remove_qemu_static() {
+	rm -f "${ROOTFS_DIR}${QEMU_STATIC_BIN}"
+}
+
+configure_pacman_sandbox() {
+	local pacman_conf="${ROOTFS_DIR}/etc/pacman.conf"
+	[[ -f "${pacman_conf}" ]] || { log "error: missing ${pacman_conf}"; exit 1; }
+	if ! grep -q '^\s*DisableSandbox\b' "${pacman_conf}"; then
+		awk 'BEGIN{inserted=0} {print; if (!inserted && $0 ~ /^\[options\]/) {print "DisableSandbox"; inserted=1}}' "${pacman_conf}" > "${pacman_conf}.tmp"
+		mv "${pacman_conf}.tmp" "${pacman_conf}"
+	fi
+}
+
+setup_chroot_resolv_conf() {
+	local target="${ROOTFS_DIR}/etc/resolv.conf"
+	RESOLV_CONF_BACKUP=""
+	RESOLV_CONF_RESTORE_MODE=""
+	if [[ -e "${target}" || -L "${target}" ]]; then
+		RESOLV_CONF_BACKUP="${ROOTFS_DIR}/etc/.resolv.conf.nasbak"
+		rm -f "${RESOLV_CONF_BACKUP}"
+		cp -a "${target}" "${RESOLV_CONF_BACKUP}"
+		RESOLV_CONF_RESTORE_MODE="restore"
+	else
+		RESOLV_CONF_RESTORE_MODE="delete"
+	fi
+	if [[ -f /etc/resolv.conf ]]; then
+		cp -L /etc/resolv.conf "${target}"
+	else
+		touch "${target}"
+	fi
+}
+
+restore_chroot_resolv_conf() {
+	local target="${ROOTFS_DIR}/etc/resolv.conf"
+	case "${RESOLV_CONF_RESTORE_MODE}" in
+		restore)
+			if [[ -n "${RESOLV_CONF_BACKUP}" && -e "${RESOLV_CONF_BACKUP}" ]]; then
+				mv -Tf "${RESOLV_CONF_BACKUP}" "${target}"
+			fi
+			;;
+		delete)
+			rm -f "${target}"
+			;;
+	esac
+	RESOLV_CONF_BACKUP=""
+	RESOLV_CONF_RESTORE_MODE=""
+}
+
+customize_rootfs() {
+	log "customizing rootfs packages and services"
+	configure_pacman_sandbox
+	setup_chroot_resolv_conf
+	ensure_qemu_static
+	mount_chroot_fs
+	local pkg_list
+	printf -v pkg_list '%q ' "${EXTRA_PACKAGES[@]}"
+	set +e
+	chroot "${ROOTFS_DIR}" /usr/bin/env -i HOME=/root TERM=xterm PATH=/usr/bin:/usr/sbin LANG=C LC_ALL=C /bin/bash -eu <<CHROOT
+set -euo pipefail
+pacman-key --init
+pacman-key --populate archlinuxarm
+pacman -Syu --noconfirm
+pacman -S --needed --noconfirm ${pkg_list}
+groupadd -f render
+groupadd -f seat
+usermod -aG video,render,seat alarm
+install -m 0640 -D /dev/null /etc/sudoers.d/90-alarm
+cat <<'SUDOERS' > /etc/sudoers.d/90-alarm
+alarm ALL=(ALL) NOPASSWD:ALL
+SUDOERS
+chmod 0440 /etc/sudoers.d/90-alarm
+cat <<'SERVICE' > /etc/systemd/system/weston-drm.service
+[Unit]
+Description=Weston DRM compositor (alarm)
+After=seatd.service systemd-user-sessions.service
+Wants=seatd.service
+
+[Service]
+Type=simple
+User=alarm
+WorkingDirectory=/home/alarm
+Environment=XDG_RUNTIME_DIR=/run/weston
+Environment=WAYLAND_DISPLAY=wayland-0
+ExecStartPre=/usr/bin/install -d -m 0700 -o alarm -g alarm /run/weston
+ExecStart=/usr/bin/weston --backend=drm-backend.so --tty=1 --log=/tmp/weston.log
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+chmod 0644 /etc/systemd/system/weston-drm.service
+export SYSTEMD_OFFLINE=1
+systemctl enable seatd.service
+systemctl enable weston-drm.service
+CHROOT
+	local chroot_rc=$?
+	set -e
+	remove_qemu_static
+	restore_chroot_resolv_conf
+	umount_chroot_fs
+	if [[ ${chroot_rc} -ne 0 ]]; then
+		log "error: rootfs customization failed"
+		exit "${chroot_rc}"
+	fi
+}
+
+customize_rootfs
 
 log "packaging rootfs to ${OUTPUT_PATH}"
 bsdtar -cpf - -C "${ROOTFS_DIR}" . | gzip -c > "${OUTPUT_PATH}"
