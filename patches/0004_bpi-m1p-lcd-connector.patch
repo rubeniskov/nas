@@ -1,0 +1,12 @@
+diff --git a/bpi-m1p-lcd.dts b/bpi-m1p-lcd.dts
+index afdb89d..feea5d1 100644
+--- a/bpi-m1p-lcd.dts
++++ b/bpi-m1p-lcd.dts
+@@ -27,6 +27,7 @@
+ 	lcd_panel: lcd-panel {
+ 		compatible = "bananapi,s070wv20-ct16", "simple-panel";
+ 		power-supply = <&reg_vcc5v0>; /* Actually driven from IPSOUT */
++		connector-type = "lvds";
+ 		/* This doesn't do anything for this particular connector */
+ 		enable-gpios = <&pio 7 9 GPIO_ACTIVE_HIGH>; /* PH9 */
+ 		backlight = <&lcd_backlight>;

@@ -14,7 +14,9 @@ HEADERS_INSTALL="${ARTIFACTS_DIR}/headers"
 BOARD_DTB="${BOARD_DTB:-sun7i-a20-bananapro.dtb}"
 UBOOT_DEFCONFIG="${UBOOT_DEFCONFIG:-Bananapro_defconfig}"
 LCD_DTBO="${LCD_DTBO:-bpi-m1p-lcd.dtbo}"
-PATCH_FILE="${ROOT_DIR}/patches/0001_dt-overlays-include-arm-dts.patch"
+DTO_PATCHES=()
+DTO_PATCHES+=("${ROOT_DIR}/patches/0001_dt-overlays-include-arm-dts.patch")
+DTO_PATCHES+=("${ROOT_DIR}/patches/0004_bpi-m1p-lcd-connector.patch")
 LINUX_PATCHES=()
 LINUX_PATCHES+=("${ROOT_DIR}/patches/0002_sun7i-a20-bananapro-cpu-clock.patch")
 LINUX_PATCHES+=("${ROOT_DIR}/patches/0003_sunxi-defconfig-landlock.patch")
@@ -74,7 +76,11 @@ apply_patch_if_needed() {
 }
 
 apply_dto_patch() {
-	apply_patch_if_needed "${DTO_DIR}" "${PATCH_FILE}" "dt-overlays"
+	local patch
+	for patch in "${DTO_PATCHES[@]}"; do
+		[[ -n "${patch}" ]] || continue
+		apply_patch_if_needed "${DTO_DIR}" "${patch}" "dt-overlays"
+	done
 }
 
 apply_linux_patches() {
