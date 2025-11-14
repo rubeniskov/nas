@@ -19,8 +19,21 @@ jobs:
         with:
           fetch-depth: 0
       
+      - name: Cache build repositories
+        uses: actions/cache@v3
+        with:
+          path: |
+            repos/linux
+            repos/u-boot
+            repos/dt-overlays
+          key: ${{ runner.os }}-repos-${{ hashFiles('scripts/banapro/common.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-repos-
+      
       - name: Install dependencies
         run: |
+          # Free up disk space
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
           sudo apt-get update
           sudo apt-get install -y \
             gcc-arm-linux-gnueabihf flex bison bc libssl-dev make git wget \
@@ -88,10 +101,19 @@ jobs:
         if: steps.version.outputs.has_release == 'true'
         run: |
           # Build the complete image
-          sudo chmod +x scripts/banapro.sh
-          sudo ./scripts/banapro.sh build
+          chmod +x scripts/banapro.sh
+          sudo -E ./scripts/banapro.sh build 2>&1 | tee build.log
         env:
           JOBS: 2
+        timeout-minutes: 300
+      
+      - name: Upload build log
+        if: always() && steps.version.outputs.has_release == 'true'
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-log
+          path: build.log
+          retention-days: 7
       
       - name: Prepare release artifacts
         if: steps.version.outputs.has_release == 'true'
