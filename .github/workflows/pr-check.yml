@@ -27,9 +27,10 @@ jobs:
             repos/linux
             repos/u-boot
             repos/dt-overlays
-          key: ${{ runner.os }}-repos-${{ hashFiles('scripts/banapro/common.sh') }}
+            downloads
+          key: ${{ runner.os }}-build-cache-${{ hashFiles('scripts/banapro/common.sh') }}
           restore-keys: |
-            ${{ runner.os }}-repos-
+            ${{ runner.os }}-build-cache-
       
       - name: Install dependencies
         run: |
