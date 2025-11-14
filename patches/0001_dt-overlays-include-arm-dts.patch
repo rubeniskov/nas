@@ -1,0 +1,40 @@
+diff --git a/Makefile b/Makefile
+index 4b95bf7..88f1e5d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -20,7 +20,9 @@ DT_OVERLAYS += pine64-rtl8723bs.dtbo
+ 
+ KERNEL_SRC ?= $(HOME)/linux
+ DTC ?= $(KERNEL_SRC)/scripts/dtc/dtc
+-DTC_INCLUDE = $(KERNEL_SRC)/include $(KERNEL_SRC)/scripts/dtc/include-prefixes 
++DTC_FLAGS ?=
++DTC_INCLUDE = $(KERNEL_SRC)/include $(KERNEL_SRC)/scripts/dtc/include-prefixes \
++	      $(KERNEL_SRC)/arch
+ DTC_CPP_FLAGS = -nostdinc -undef -D__DTS__ $(addprefix -I,$(DTC_INCLUDE))
+ 
+ .PHONY: clean FORCE
+@@ -31,9 +33,9 @@ all: $(DT_OVERLAYS)
+ 	@echo "  DTC $@"
+ 	@# Test first
+ 	@$(CPP) $(DTC_CPP_FLAGS) -D __DTO_TEST__ -x assembler-with-cpp $< | \
+-	    $(DTC) $(addprefix -i ,$(DTC_INCLUDE)) -b 0 -O dtb -o $@
++	    $(DTC) $(addprefix -i ,$(DTC_INCLUDE)) $(DTC_FLAGS) -b 0 -O dtb -o $@
+ 	@$(CPP) $(DTC_CPP_FLAGS) -x assembler-with-cpp $< | \
+-	    $(DTC) $(addprefix -i ,$(DTC_INCLUDE)) -b 0 -O dtb -q -o $@
++	    $(DTC) $(addprefix -i ,$(DTC_INCLUDE)) $(DTC_FLAGS) -b 0 -O dtb -q -o $@
+ 
+ clean:
+ 	rm -f *.dtbo
+diff --git a/bpi-m1p-lcd.dts b/bpi-m1p-lcd.dts
+index a781a6a..afdb89d 100644
+--- a/bpi-m1p-lcd.dts
++++ b/bpi-m1p-lcd.dts
+@@ -5,7 +5,7 @@
+ // Bananapi 800x480 7" RGB LCD panel attached on LCD FPC connector.
+ 
+ #ifdef __DTO_TEST__
+-#include <arm/sun7i-a20-bananapi-m1-plus.dts>
++#include <arm/boot/dts/allwinner/sun7i-a20-bananapro.dts>
+ #else
+ /dts-v1/;
+ /plugin/;
