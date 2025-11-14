@@ -2,12 +2,16 @@
 
 ## Automated Builds
 
-The repository uses GitHub Actions to automatically build and release BananaPro images when changes are pushed to the `main` branch.
+The repository uses GitHub Actions for continuous integration and deployment:
+
+- **PR Checks**: Every pull request is automatically built to verify changes work correctly
+- **Releases**: Pushing to `main` triggers a build and creates a GitHub release with the generated image
 
 ### How it works:
-1. **Conventional Commits**: Use conventional commit messages (`feat:`, `fix:`, `docs:`, etc.) in your commits
-2. **Automatic Versioning**: The CI pipeline uses semantic versioning to determine the next version based on your commits
-3. **Automated Release**: Each push to `main` triggers a build that creates a GitHub release with the generated image
+1. **Pull Request Validation**: When you open a PR, the build is automatically tested to catch issues early
+2. **Conventional Commits**: Use conventional commit messages (`feat:`, `fix:`, `docs:`, etc.) in your commits
+3. **Automatic Versioning**: The CI pipeline uses semantic versioning to determine the next version based on your commits
+4. **Automated Release**: Each push to `main` triggers a build that creates a GitHub release with the generated image
 
 ### Available Releases
 Check the [Releases](https://github.com/rubeniskov/nas/releases) page for the latest BananaPro images.

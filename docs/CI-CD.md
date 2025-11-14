@@ -2,9 +2,40 @@
 
 ## Overview
 
-This repository uses GitHub Actions to automatically build and release BananaPro images based on conventional commits.
+This repository uses GitHub Actions with two workflows to ensure code quality and automate releases:
 
-## Workflow: Build and Release BananaPro Image
+1. **PR Build Check** - Validates that builds work correctly on pull requests
+2. **Build and Release** - Creates versioned releases when changes are merged to main
+
+## Workflow 1: PR Build Check
+
+**File**: `.github/workflows/pr-check.yml`
+
+### Trigger
+- Runs on pull request events (opened, synchronized, reopened) targeting the `main` branch
+
+### Purpose
+Validates that proposed changes can build successfully before merging, preventing broken builds from reaching main.
+
+### Process
+
+1. **Build Validation**
+   - Clones necessary repositories (Linux kernel, U-Boot, dt-overlays)
+   - Applies patches
+   - Builds complete BananaPro image
+   - Verifies artifacts are created correctly
+
+2. **Feedback**
+   - Posts comment on PR with build status
+   - Uploads build logs as artifacts for debugging
+   - Checks image size and validity
+
+### Benefits
+- Catches build issues early in development
+- Provides quick feedback to contributors
+- Ensures main branch always has working builds
+
+## Workflow 2: Build and Release BananaPro Image
 
 **File**: `.github/workflows/build-release.yml`
 
