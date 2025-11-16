@@ -20,6 +20,7 @@ DTO_PATCHES+=("${ROOT_DIR}/patches/0004_bpi-m1p-lcd-connector.patch")
 LINUX_PATCHES=()
 LINUX_PATCHES+=("${ROOT_DIR}/patches/0002_sun7i-a20-bananapro-cpu-clock.patch")
 LINUX_PATCHES+=("${ROOT_DIR}/patches/0003_sunxi-defconfig-landlock.patch")
+LINUX_PATCHES+=("${ROOT_DIR}/patches/0005_panel-simple-bananapi-connector-type.patch")
 JOBS="${JOBS:-$(nproc)}"
 APT_PKGS=()
 APT_PKGS+=(gcc-arm-linux-gnueabihf flex bison bc libssl-dev make git wget)

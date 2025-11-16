@@ -1,6 +1,6 @@
 repos
 downloads
 artifacts
-.log
+*.log
 screenlog.0
 .DS_Store
