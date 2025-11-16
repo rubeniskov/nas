@@ -75,7 +75,30 @@ Based on the conversion table from sunxi-linux wiki:
 | `le` | `lcd_hbp - hs` | Left margin |
 | `ri` | `lcd_ht - lcd_x - lcd_hbp` | Right margin |
 | `up` | `lcd_vbp - vs` | Top margin |
-| `lo` | `(lcd_vt / 2) - lcd_y - lcd_vbp` | Bottom margin (A20) |
+| `lo` | `(lcd_vt / 2) - lcd_y - lcd_vbp` | Bottom margin (A20); for sun8i use `lcd_vt - lcd_y - lcd_vbp` |
+
+### Worked Example (from `banana_pro_5lcd.fex`)
+
+1. Extract the LCD block from the FEX and note:
+    - `lcd_x = 800`, `lcd_y = 480`
+    - `lcd_frm = 0` (RGB888)
+    - `lcd_dclk_freq = 30000` (kHz)
+    - `lcd_hv_hspw = 48`, `lcd_hv_vspw = 3`
+    - `lcd_hbp = 88`, `lcd_ht = 928`
+    - `lcd_vbp = 32`, `lcd_vt = 1050`
+2. Apply the rules above:
+    - `le = lcd_hbp - hs = 88 - 48 = 40`
+    - `ri = lcd_ht - lcd_x - lcd_hbp = 928 - 800 - 88 = 40`
+    - `up = lcd_vbp - vs = 32 - 3 = 29`
+    - `lo = (lcd_vt / 2) - lcd_y - lcd_vbp = 525 - 480 - 32 = 13`
+3. Assemble the final string:
+    ```
+    CONFIG_VIDEO_LCD_MODE="x:800,y:480,depth:24,pclk_khz:30000,le:40,ri:40,up:29,lo:13,hs:48,vs:3,sync:3,vmode:0"
+    ```
+
+This matches the entry from the Linux-sunxi bulk conversion table and gives confidence that the timing budget is correct for the 5-inch TFT.
+
+> Tip: to automate these calculations for any FEX file, run `scripts/fex_to_uboot.py <path-to-fex>` and the helper will print both the `CONFIG_VIDEO_LCD_MODE` string and a ready-to-paste `drm_display_mode` JSON block.
 
 ## Building U-Boot with LCD Support
 
