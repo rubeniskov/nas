@@ -2,6 +2,8 @@
 
 This guide explains how to configure U-Boot on the BananaPro to load the kernel, device tree blobs (DTBs), and root filesystem from a TFTP server over the network.
 
+> **Quick Start**: For a condensed reference, see [TFTP_BOOT_QUICK_REFERENCE.md](TFTP_BOOT_QUICK_REFERENCE.md)
+
 ## Table of Contents
 
 - [Overview](#overview)
