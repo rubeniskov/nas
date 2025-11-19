@@ -2,11 +2,13 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/u-boot-banapro:"
 
 SRC_URI:append:bananapro = " \
     file://lcd.cfg \
+    file://tftp.cfg \
     file://boot-banapro.cmd \
+    file://boot-banapro-tftp.cmd \
 "
 
 do_configure:append:bananapro() {
-    printf "Applying BananaPro LCD fragment to U-Boot configuration\n"
+    printf "Applying BananaPro LCD and TFTP fragments to U-Boot configuration\n"
     config_dir="${B}"
     if [ ! -f "${config_dir}/.config" ]; then
         cfg_file=$(find "${B}" -maxdepth 2 -type f -name '.config' | head -n1 || true)
@@ -17,7 +19,8 @@ do_configure:append:bananapro() {
     base_config="${config_dir}/.config"
     [ -f "${base_config}" ] || bbfatal "Unable to locate U-Boot base config at ${base_config}"
     cp ${WORKDIR}/lcd.cfg ${config_dir}/banapro-lcd.cfg
-    ${S}/scripts/kconfig/merge_config.sh -m -O ${config_dir} ${base_config} ${config_dir}/banapro-lcd.cfg
+    cp ${WORKDIR}/tftp.cfg ${config_dir}/banapro-tftp.cfg
+    ${S}/scripts/kconfig/merge_config.sh -m -O ${config_dir} ${base_config} ${config_dir}/banapro-lcd.cfg ${config_dir}/banapro-tftp.cfg
     oe_runmake -C ${S} O=${config_dir} olddefconfig
 }
 
@@ -36,4 +39,7 @@ do_compile:prepend:bananapro() {
 
     # Override the default meta-sunxi boot.cmd with our BananaPro-specific script
     install -m 0644 ${WORKDIR}/boot-banapro.cmd ${WORKDIR}/boot.cmd
+    
+    # Also install TFTP boot script as boot-tftp.cmd for optional network boot
+    install -m 0644 ${WORKDIR}/boot-banapro-tftp.cmd ${WORKDIR}/boot-tftp.cmd
 }

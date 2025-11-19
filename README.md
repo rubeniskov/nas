@@ -54,6 +54,11 @@ make flash SD_DEVICE=/dev/sdX
 
 Variables such as `YOCTO_HELPER`, `YOCTO_BUILD_DIR`, `DEPLOY_DIR`, and `IMAGE_BASE` can be overridden if your workspace layout differs. The `flash` target checks that the `.wic.gz` image and `.wic.bmap` exist and refuses to run unless `SD_DEVICE` points to an actual block device. Remember that the operation will wipe the selected device entirely, so double-check the path before flashing.
 
+## Additional Guides
+
+- [TFTP Boot Configuration](docs/TFTP_BOOT_CONFIGURATION.md): Configure U-Boot to load kernel, DTBs, and rootfs from a TFTP server over the network
+- [5-Inch LCD Configuration](docs/LCD_5INCH_CONFIGURATION.md): Configure the 5-inch LCD display
+
 # References
 
 - https://archlinuxarm.org/platforms/armv7/allwinner/cubietruck

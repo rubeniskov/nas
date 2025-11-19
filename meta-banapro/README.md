@@ -5,7 +5,7 @@ Yocto layer that reproduces the Banana Pro bring-up workflow previously handled 
 ## Contents
 
 - **Machine**: `bananapro` – inherits Allwinner A20 settings, enforces the Mesa GBM stack (instead of proprietary Mali blobs), and adds the 5" RGB LCD overlay.
-- **U-Boot**: applies the 800x480 timing fragment automatically.
+- **U-Boot**: applies the 800x480 timing fragment automatically, includes TFTP network boot support with dual boot scripts (`boot.scr` for SD/eMMC, `boot-tftp.scr` for network boot).
 - **Kernel**: pulls in the local Banana Pro patches and builds the `bpi-m1p-lcd.dtbo` overlay.
 - **Image**: `banapro-image` – Weston-capable rootfs with networking tools.
 
@@ -45,6 +45,32 @@ echo 'UBOOT_CONFIG_FLAGS:bananapro += "CONFIG_VIDEO_LCD_MODE=\"x:1024,y:600,...\
 ```
 
 Alternatively, edit `recipes-bsp/u-boot/u-boot-banapro/lcd.cfg` and rebuild.
+
+## TFTP Network Boot
+
+The layer includes TFTP network boot support for development and diskless operation. Two boot scripts are provided:
+
+- **boot.scr** (default): Boots from SD/eMMC storage
+- **boot-tftp.scr**: Boots kernel, DTB, and optionally rootfs from TFTP server
+
+To use TFTP boot, at the U-Boot prompt:
+
+```
+# Set network configuration
+setenv serverip 192.168.1.100
+setenv ipaddr 192.168.1.200
+
+# Load and execute TFTP boot script
+load mmc 0:1 ${scriptaddr} boot-tftp.scr
+source ${scriptaddr}
+```
+
+The TFTP boot script supports three modes:
+1. **NFS root** (default): Load kernel, DTB from TFTP and mount root via NFS
+2. **Local root**: Load kernel, DTB from TFTP but use local SD/eMMC for rootfs (`setenv use_local_root 1`)
+3. **Initramfs**: Load complete system including initramfs from TFTP (`setenv use_initramfs 1`)
+
+For detailed TFTP setup instructions, server configuration, and troubleshooting, see [TFTP Boot Configuration](../docs/TFTP_BOOT_CONFIGURATION.md).
 
 ## Next steps
 
