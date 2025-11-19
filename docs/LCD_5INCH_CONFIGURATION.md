@@ -60,6 +60,38 @@ static const struct drm_display_mode bananapi_5inch_lcd = {
 };
 ```
 
+### Device Tree Overlay Snippet (panel-simple)
+
+The Yocto build now ships `overlays/bpi-m1p-lcd.dtbo`, which instantiates the
+`bananapi,s070wv20-ct16` panel together with the backlight and EDT touchscreen.
+If you need to customise it manually, mirror the following structure:
+
+```dts
+lcd_panel: lcd-panel {
+    compatible = "bananapi,s070wv20-ct16", "simple-panel";
+    connector-type = "dpi";
+    data-mapping = "rgb888";
+    backlight = <&lcd_backlight>;
+    enable-gpios = <&pio 7 9 GPIO_ACTIVE_HIGH>; /* PH9 */
+
+    panel-timing {
+        clock-frequency = <30000000>;
+        hactive = <800>;
+        hfront-porch = <40>;
+        hback-porch = <40>;
+        hsync-len = <48>;
+        vactive = <480>;
+        vfront-porch = <13>;
+        vback-porch = <29>;
+        vsync-len = <3>;
+    };
+};
+```
+
+This maps the U-Boot timing string to the Linux `struct drm_display_mode`, so
+KMS/DRM drivers (Weston, kmscube, etc.) can light up the panel without extra
+userspace tweaks.
+
 ## FEX to U-Boot Conversion Reference
 
 Based on the conversion table from sunxi-linux wiki:
@@ -158,6 +190,11 @@ fbset -i
 
 # Display test pattern
 cat /dev/urandom > /dev/fb0
+
+# Exercise the DRM stack (Wayland session)
+export XDG_RUNTIME_DIR=/run/user/0
+weston --backend=drm-backend.so --tty=1 &
+sleep 3 && kmscube
 ```
 
 ## Troubleshooting

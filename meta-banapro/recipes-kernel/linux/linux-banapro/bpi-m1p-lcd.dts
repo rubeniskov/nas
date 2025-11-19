@@ -1,0 +1,123 @@
+// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
+//
+// Bananapi 800x480 7" RGB LCD panel attached on LCD FPC connector.
+
+/dts-v1/;
+/plugin/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/pwm/pwm.h>
+
+&{/} {
+	panel_power: panel-power {
+		compatible = "regulator-fixed";
+		regulator-name = "panel-power";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		gpio = <&pio 7 12 GPIO_ACTIVE_HIGH>;	/* PH12 */
+		enable-active-high;
+		regulator-boot-on;
+	};
+
+	lcd_backlight: lcd-backlight {
+		compatible = "pwm-backlight";
+		pwms = <&pwm 0 20000 PWM_POLARITY_INVERTED>; /* 50 kHz */
+		enable-gpios = <&pio 7 8 GPIO_ACTIVE_HIGH>; /* PH8 */
+		brightness-levels = <0 10 20 30 40 50 60 70 80 90 100>;
+		default-brightness-level = <5>;
+	};
+
+	/* Panel node */
+	panel: panel {
+		compatible = "bananapi,s070wv20-ct16";
+
+		power-supply = <&panel_power>;
+		backlight = <&lcd_backlight>;
+
+		/* Panel enable GPIO – on BPi LCD FPC this is usually PH9 */
+		enable-gpios = <&pio 7 9 GPIO_ACTIVE_HIGH>; /* PH9 */
+
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		port {
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			/* Endpoint 0: panel input from TCON0 channel 0 */
+			panel_in_tcon0: endpoint@0 {
+				reg = <0>;
+				remote-endpoint = <&tcon0_out_lcd>;
+			};
+		};
+	};
+};
+
+&de {
+	status = "okay";
+};
+
+/* Touchscreen FT5306 (same style as Armbian example) */
+&i2c3 {
+	status = "okay";
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c3_pins>;
+
+	touchscreen@38 {
+		compatible = "edt,edt-ft5306", "edt,edt-ft5x06";
+		reg = <0x38>;
+
+		interrupt-parent = <&pio>;
+		interrupts = <7 9 IRQ_TYPE_EDGE_FALLING>; /* PH9 as IRQ */
+
+		/* If you have a reset line routed, you can add it here.
+		   Armbian example only uses PH7 as a GPIO-out in pinctrl. */
+
+		touchscreen-size-x = <800>;
+		touchscreen-size-y = <480>;
+	};
+};
+
+&pio {
+	lcd0_rgb888_pins: lcd0-rgb888-pins {
+		pins = "PD0", "PD1", "PD2", "PD3", "PD4", "PD5", "PD6", "PD7",
+		       "PD8", "PD9", "PD10", "PD11", "PD12", "PD13", "PD14",
+		       "PD15", "PD16", "PD17", "PD18", "PD19", "PD20", "PD21",
+		       "PD22", "PD23", "PD24", "PD25", "PD26", "PD27";
+		function = "lcd0";
+	};
+	edt_ft5x06_pins_a: ft5_irq {
+		pins = "PH9";
+		function = "irq";
+		drive-strength = <20>;
+		bias-pull-up;
+	};
+
+	edt_ft5x06_pins_b: ft5_reset {
+		pins = "PH7";
+		function = "gpio_out";
+		drive-strength = <20>;
+		bias-pull-up;
+		output-high;
+	};
+};
+
+&pwm {
+	pinctrl-names = "default";
+	pinctrl-0 = <&pwm0_pin>;
+	status = "okay";
+};
+
+&tcon0 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&lcd0_rgb888_pins>;
+	status = "okay";
+};
+
+&tcon0_out {
+	tcon0_out_lcd: endpoint@0 {
+		reg = <0>;
+		remote-endpoint = <&panel_in_tcon0>;
+	};
+};
